@@ -22,7 +22,10 @@ class imageGUI(basicGUI):
         super(imageGUI, self).__init__()
         self.NEW_HEIGHT = 1024
         self.NEW_WIDTH = 680
-        self.path = 'C:/Users/ngw861/Desktop/imgs/'
+        self.path = os.getcwd()
+        self.imgsPath = os.path.join(self.path,'imgs')
+        if not os.path.exists(self.imgsPath):
+            os.mkdir(self.imgsPath)
         self.img_formats = ['CR2','ARW','jpg','tif','tiff']
         self.img_fps = self.get_img_fps()
         self.img_fp = self.get_next_img_fp()
@@ -31,13 +34,14 @@ class imageGUI(basicGUI):
         self.img = self.load_img(self.img_fp)
         
         self.ORIG_HEIGHT, self.ORIG_WIDTH = self.img.shape[:2]
-        self.csv_fps = glob(os.path.join(self.path,'*.csv'))
+        self.csv_fps = glob(os.path.join(self.imgsPath,'*.csv'))
         self.preview = QLabel(self)
         self.preview.setMinimumSize(self.NEW_HEIGHT,self.NEW_WIDTH)
         self.make_preview_img(self.img)
         self.preview.setObjectName("image")
         self.preview.mousePressEvent = self.getPos
         
+        self.pathField = QLineEdit()
         self.categories = self.get_categories()
         self.addCategoryField = QLineEdit()
         self.addCategoryButton = QPushButton("Add Category")
@@ -164,13 +168,13 @@ class imageGUI(basicGUI):
     def get_img_fps(self):
         img_fps = []
         for _format in self.img_formats:
-            img_fps += glob(os.path.join(self.path,'*.%s'%_format))
+            img_fps += glob(os.path.join(self.imgsPath,'*.%s'%_format))
         if len(img_fps) == 0:
-            self.warn('No images found in folder %s of types %s'%(path, img_formats))
+            self.warn('No images found in folder %s of types %s'%(self.imgsPath, self.img_formats))
         return img_fps
         
     def get_next_img_fp(self):
-        self.csv_fps = glob(os.path.join(self.path,'*.csv'))
+        self.csv_fps = glob(os.path.join(self.imgsPath,'*.csv'))
         for img_fp in self.img_fps:
             img_format = img_fp.split('.')[-1]
             csv_fp = img_fp.replace(img_format, 'csv')
