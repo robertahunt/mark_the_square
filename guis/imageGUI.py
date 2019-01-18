@@ -6,6 +6,7 @@ Created on Tue Jan  8 18:15:32 2019
 """
 import os
 import cv2
+import time
 import rawpy
 import numpy as np
 from glob import glob
@@ -113,10 +114,10 @@ class imageGUI(basicGUI):
     def add_category(self):
         category = self.addCategoryField.text()
         if len(category.strip()):
-            self.categories += [category]
+            print(self.categories)
+            self.categories += [category.strip()]
             self.categories = sorted(self.categories)
             np.savetxt(os.path.join(self.path,"categories.csv"),np.array(self.categories),fmt='%s',delimiter=",")
-            self.categoriesDropdown.clear()
             self.categoriesDropdown.addItems(self.categories)
             self.addCategoryField.clear()
         else:
@@ -128,8 +129,8 @@ class imageGUI(basicGUI):
             categories = np.loadtxt(fp, dtype='str',delimiter=',')
             if categories.size == 1:
                 return [str(categories)]
-            elif categories.size > 1:
-                return categories
+            elif len(categories) > 1:
+                return list(categories)
             else:
                 return []
         else:
