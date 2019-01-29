@@ -9,9 +9,10 @@ import cv2
 import time
 import rawpy
 import numpy as np
+import pandas as pd
 from glob import glob
 from PyQt5 import QtCore, QtGui
-from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QLineEdit, QPushButton, QComboBox, QPlainTextEdit, QMessageBox
+from PyQt5.QtWidgets import QCheckBox, QApplication, QWidget, QLabel, QLineEdit, QPushButton, QComboBox, QPlainTextEdit, QMessageBox
 
 from guis.progressDialog import progressDialog
 from guis.basicGUI import basicGUI
@@ -20,8 +21,11 @@ from guis.basicGUI import basicGUI
 class imageGUI(basicGUI):
     def __init__(self, initial_msg = "Working."):
         super(imageGUI, self).__init__()
-        self.NEW_HEIGHT = 1024
-        self.NEW_WIDTH = 680
+        self.NEW_HEIGHT = 680#1024
+        self.NEW_WIDTH = 1024#680
+        self.autoSwitch = True
+        self.radius = 50
+        self.columns = ['category','x','y']
         self.path = os.getcwd()
         self.imgsPath = os.path.join(self.path,'imgs')
         if not os.path.exists(self.imgsPath):
@@ -32,12 +36,14 @@ class imageGUI(basicGUI):
         self.img_format = self.img_fp.split('.')[-1]
         self.csv_fp = self.img_fp.replace(self.img_format,'csv')
         self.img = self.load_img(self.img_fp)
+        self.canvas = self.img.copy()
         
         self.ORIG_HEIGHT, self.ORIG_WIDTH = self.img.shape[:2]
         self.csv_fps = glob(os.path.join(self.imgsPath,'*.csv'))
         self.preview = QLabel(self)
-        self.preview.setMinimumSize(self.NEW_HEIGHT,self.NEW_WIDTH)
-        self.make_preview_img(self.img)
+        self.preview.setMinimumSize(self.NEW_WIDTH,self.NEW_HEIGHT)
+        self.preview.setMaximumSize(self.NEW_WIDTH,self.NEW_HEIGHT)
+        self.make_preview_img(self.canvas)
         self.preview.setObjectName("image")
         self.preview.mousePressEvent = self.getPos
         
@@ -53,6 +59,10 @@ class imageGUI(basicGUI):
         self.rmCategoryButton = QPushButton("Remove Category")
         self.rmCategoryButton.clicked.connect(self.remove_category)
         
+        self.autoSwitchCategoryCheckbox = QCheckBox('Auto Switch Category')
+        self.autoSwitchCategoryCheckbox.toggle()
+        self.autoSwitchCategoryCheckbox.stateChanged.connect(self.toggleAutoSwitchCategory)
+        
         self.logPreview = QPlainTextEdit()
         self.logPreview.setDisabled(True)
         self.logPreviewSaveButton = QPushButton("Save Log after manual edits")
@@ -60,7 +70,7 @@ class imageGUI(basicGUI):
         self.logEditToggleButton = QPushButton("Toggle Allow Manual Edits")
         self.logEditToggleButton.clicked.connect(self.toggle_log_edit)
         
-        self.log = []
+        self.log = pd.DataFrame(columns=self.columns)
         
         self.toNextButton = QPushButton("Done, go to next butterfly")
         self.toNextButton.clicked.connect(self.next_butterfly)
@@ -74,15 +84,21 @@ class imageGUI(basicGUI):
         self.grid.addWidget(self.addCategoryButton,0,2,1,1)
         self.grid.addWidget(self.categoriesDropdown,1,1,1,2)
         self.grid.addWidget(self.rmCategoryButton,2,1,1,2)
-        self.grid.addWidget(self.logPreview,3,1,3,2)
-        self.grid.addWidget(self.logEditToggleButton,7,1,1,2)
-        self.grid.addWidget(self.logPreviewSaveButton,8,1,1,2)
-        self.grid.addWidget(self.toNextButton,9,1,1,2)
+        self.grid.addWidget(self.autoSwitchCategoryCheckbox,3,1,1,2)
+        self.grid.addWidget(self.logPreview,4,1,3,2)
+        self.grid.addWidget(self.logEditToggleButton,8,1,1,2)
+        self.grid.addWidget(self.logPreviewSaveButton,9,1,1,2)
+        self.grid.addWidget(self.toNextButton,10,1,1,2)
         
-        
-        
+
         
         self.setLayout(self.grid)
+    
+    def toggleAutoSwitchCategory(self):
+        if self.autoSwitch == True:
+            self.autoSwitch = False
+        else:
+            self.autoSwitch = True
     
     def next_butterfly(self):
         msg = "Are you sure you want to move to the next one?"
@@ -94,13 +110,20 @@ class imageGUI(basicGUI):
         
         self.save_log()
         self.logPreview.clear()
-        self.log = []
+        
         self.img_fps = self.get_img_fps()
         self.img_fp = self.get_next_img_fp()
-        self.img_format = self.img_fp.split('.')[-1]
-        self.csv_fp = self.img_fp.replace(self.img_format,'csv')
+        self.img_format = self.img_fp.split('.')[-1]        
         self.img = self.load_img(self.img_fp)
-        self.make_preview_img(self.img)
+        self.canvas = self.img.copy()
+        self.make_preview_img(self.canvas)
+        
+        self.csv_fp = self.img_fp.replace(self.img_format,'csv')
+        
+        self.log = pd.DataFrame(columns=self.columns)
+        self.log.sort_index(ascending=False).to_csv(self.csv_fp, header=False)
+        self.logPreview.setPlainText(open(self.csv_fp).read())
+        self.categoriesDropdown.setCurrentIndex(0)
     
     def toggle_log_edit(self):
         if self.logPreview.isEnabled():
@@ -120,8 +143,8 @@ class imageGUI(basicGUI):
         if len(category.strip()):
             print(self.categories)
             self.categories += [category.strip()]
-            self.categories = sorted(self.categories)
             np.savetxt(os.path.join(self.path,"categories.csv"),np.array(self.categories),fmt='%s',delimiter=",")
+            self.categoriesDropdown.clear()
             self.categoriesDropdown.addItems(self.categories)
             self.addCategoryField.clear()
         else:
@@ -143,23 +166,77 @@ class imageGUI(basicGUI):
     def make_preview_img(self, img):
         preview_img = QtGui.QImage(img.data, img.shape[1], img.shape[0],
                                img.shape[1]*3, QtGui.QImage.Format_RGB888)
-        preview_img = QtGui.QPixmap.fromImage(preview_img).scaled(self.NEW_HEIGHT,self.NEW_WIDTH)
+        preview_img = QtGui.QPixmap.fromImage(preview_img).scaled(self.NEW_WIDTH,self.NEW_HEIGHT)
         self.preview.setPixmap(preview_img)
     
     def getPos(self, event):
-        
         category = self.categoriesDropdown.currentText()
         if len(category) == 0:
             self.warn('No category selected')
             return None
-
+        
         x = event.pos().x()
         y = event.pos().y() 
         orig_x = int(self.ORIG_WIDTH*x/self.NEW_WIDTH)
         orig_y = int(self.ORIG_HEIGHT*y/self.NEW_HEIGHT)
-        self.log = [[category, orig_x, orig_y]] + self.log
-        np.savetxt(self.csv_fp,np.array(self.log),fmt='%s',delimiter=",")
+        if event.button() == QtCore.Qt.LeftButton:
+            log_entry = pd.Series([category, orig_x, orig_y],index=self.columns)
+            self.log = self.log.append(log_entry, ignore_index=True)
+            self.update_log_file()
+            self.draw_circle(orig_x, orig_y)
+            self.draw_index(orig_x, orig_y, len(self.log)-1)
+        elif event.button() == QtCore.Qt.RightButton:
+            nearby_circle = self.check_if_nearby_point(orig_x,orig_y)
+            if nearby_circle == None:
+                self.autoSwitchCategory(self)
+            else:
+                self.log = self.log[self.log.index != nearby_circle]
+                self.update_log_file()
+                self.redraw_circles(self.log)                
+        else:
+            self.warn('Button not understood.')
+        
+        if self.autoSwitch:
+            self.autoSwitchCategory()
+        
+    def autoSwitchCategory(self):
+        category_idx = self.categoriesDropdown.currentIndex()
+        if (category_idx + 1) == len(self.categories):
+            next_category_idx = 0
+        else:
+            next_category_idx = category_idx + 1
+        self.categoriesDropdown.setCurrentIndex(next_category_idx)
+        
+    def update_log_file(self):
+        self.log = self.log.reset_index(drop=True)
+        self.log.sort_index(ascending=False).to_csv(self.csv_fp, header=False)
         self.logPreview.setPlainText(open(self.csv_fp).read())
+        
+    def check_if_nearby_point(self, x, y):
+        for name, row in self.log.sort_index(ascending=False).iterrows():
+            _x = row['x']
+            _y = row['y']
+            dist = np.sqrt((_x-x)**2 + (_y-y)**2)
+            if dist < self.radius:
+                return name
+        return None
+        
+    def redraw_circles(self, log):
+        self.canvas = self.img.copy()
+        for name,row in log.iterrows():
+            self.draw_circle(row['x'],row['y'],redraw=False)
+            self.draw_index(row['x'],row['y'],name)
+        self.make_preview_img(self.canvas)
+        
+    def draw_circle(self,x,y,redraw=True):
+        cv2.circle(self.canvas,(x,y),self.radius,(255,50,50), 10)
+        if redraw:
+            self.make_preview_img(self.canvas)
+        
+    def draw_index(self,x,y,idx,redraw=True):
+        cv2.putText(self.canvas,str(idx),(x+self.radius+10,y),cv2.FONT_HERSHEY_SIMPLEX,2,(0,0,0), 5)
+        if redraw:
+            self.make_preview_img(self.canvas)
         
     def save_log(self):
         with open(self.csv_fp, 'w') as f:
@@ -186,8 +263,7 @@ class imageGUI(basicGUI):
         img_format = img_fp.split('.')[-1]
         if img_format in ['CR2','ARW']:
             with rawpy.imread(img_fp) as raw:
-                return raw.postprocess()
+                return raw.postprocess(use_camera_wb=True)
         else:
             return cv2.cvtColor(cv2.imread(img_fp), cv2.COLOR_BGR2RGB)
-            
             
