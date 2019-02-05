@@ -261,7 +261,7 @@ class imageGUI(basicGUI):
         
     def load_img(self, img_fp):
         img_format = img_fp.split('.')[-1]
-        if img_format in ['CR2','ARW']:
+        if img_format.lower() in ['cr2','arw']:
             with rawpy.imread(img_fp) as raw:
                 return raw.postprocess(use_camera_wb=True)
         else:
