@@ -31,7 +31,7 @@ class GUI(basicGUI):
         
         
     def initUI(self):        
-        self.setWindowTitle("Where in the world is the Blob?")  
+        self.setWindowTitle("Where in the world is the square?")  
         #self.setWindowIcon(QtGui.QIcon('icon.png')) 
   
         self.grid.addWidget(self.image, 0, 0)
